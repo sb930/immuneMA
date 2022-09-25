@@ -1,0 +1,95 @@
+---
+title: "CHI3L_anlaysis"
+author: "Sanjay"
+date: "2022-09-24"
+output: html_document
+---
+
+```{r}
+# load libraries 
+library(metafor)
+library(dplyr)
+library(robumeta)
+library(data.table)
+
+
+```
+
+```{r}
+# read and wrangle data 
+
+data <- read.csv('/Users/sb930/Documents/PhD/MND FTD Metaanalysis/FTD IF review - TC2_v2.csv', header=TRUE)
+
+# transpose then add back in row and column headers 
+data_rownames = rownames(data)
+data_colnames = colnames(data)
+data_t <- transpose(data)
+rownames(data_t) <- data_colnames
+colnames(data_t) <- data_rownames
+colnames(data_t) <- data_t[1,]
+data_t <- data_t[-1,]
+data_t <- data.frame(data_t)
+
+# subset the dataframe to variables of interest 
+# for each immune marker, choose the appropriate rows - can hover over R to get the column number when viewing
+data_t_rownames = rownames(data_t)
+data2 <- data_t[c(9,28,69,70,76,77)]
+#add row header as a column
+data2$studyid = c(data_t_rownames)
+
+# remove empty rows
+# change name here of immune marker here 
+data2[data2 == ""] <- NA    
+dat <- subset(data2, !is.na(mean_CHI3L.1_con))
+
+```
+
+
+```{r}
+# make data frame columns except study id numeric
+df2 <- mutate_at(dat, vars(contains("_")), function(x) as.numeric(as.character(x)))
+```
+
+
+```{r}
+# use escalc to calculate effect sizes 
+
+# change name of immune marker for each of the terms
+
+df2 <- escalc(data=df2, measure="SMD", m1i=mean_CHI3L.1_con, m2i=mean_CHI3L.1_ftd,
+                sd1i=SD_CHI3L.1_con, sd2i=SD_CHI3L.1_ftd,
+                n1i=n_con, n2i=n_ftd,slab=paste("ID", studyid))
+
+df2
+
+```
+
+
+```{r}
+#random effects model 
+res <- rma (yi, vi, method="REML", data=df2)
+```
+
+
+```{r}
+# construct forest plot 
+
+forest(res) 
+
+```
+
+```{r}
+# construct funnel plot 
+
+funnel(res) 
+
+```
+
+```{r}
+# heterogeneity measures
+
+res.CA  <- rma(yi, vi, method="HE", data=df2)
+
+res.CA
+
+```
