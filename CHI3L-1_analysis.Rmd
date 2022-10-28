@@ -56,9 +56,9 @@ df2 <- mutate_at(dat, vars(contains("_")), function(x) as.numeric(as.character(x
 
 # change name of immune marker for each of the terms
 
-df2 <- escalc(data=df2, measure="SMD", m1i=mean_CHI3L.1_con, m2i=mean_CHI3L.1_ftd,
-                sd1i=SD_CHI3L.1_con, sd2i=SD_CHI3L.1_ftd,
-                n1i=n_con, n2i=n_ftd,slab=paste("ID", studyid))
+df2 <- escalc(data=df2, measure="SMD", m2i=mean_CHI3L.1_con, m1i=mean_CHI3L.1_ftd,
+                sd2i=SD_CHI3L.1_con, sd1i=SD_CHI3L.1_ftd,
+                n2i=n_con, n1i=n_ftd,slab=paste("ID", studyid))
 
 df2
 
