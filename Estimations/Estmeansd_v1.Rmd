@@ -1,0 +1,289 @@
+
+---
+title: "Estmeansd_v0.Rmd"
+author: "Sanjay"
+date: "24/12/2022"
+output: html_document
+---
+
+```{r}
+library(estmeansd)
+```
+
+# Step 1 run library for some synthetic data
+
+```{r}
+
+# Generate summary data
+set.seed(1)
+n <- 100
+x <- stats::rlnorm(n, 2.5, 1)
+quants <- stats::quantile(x, probs = c(0.25, 0.5, 0.75))
+obs.mean <- mean(x)
+obs.sd <- stats::sd(x)
+
+```
+
+
+```{r}
+
+## Estimate the sample mean and standard deviation using the QE method
+meansd <- qe.mean.sd(min.val = 0, q1.val = 3, med.val = 9, q3.val = 12, max.val = 13,
+    n = 100)
+```
+
+
+```{r}
+
+meansd$est.mean
+meansd$est.sd
+
+```
+
+
+# Step 2 run library for some real imported data
+
+```{r}
+# Create a dataframe with some subsetted data from FTD meta-analysis
+
+library(readxl)
+
+results <-read_excel("/Users/sb930/Downloads/221225_FTD_IF_review.xlsx", sheet = 10)
+
+results
+
+
+```
+
+
+```{r}
+# Create a data frame from a specific paper and immune marker using flexibly using median, IQR and range
+
+library(data.table)
+results2 <- transpose(results)
+results2
+
+
+# transpose then add back in row and column headers 
+data_rownames = rownames(results)
+data_colnames = colnames(results)
+data_t <- transpose(results)
+rownames(data_t) <- data_colnames
+colnames(data_t) <- data_rownames
+colnames(data_t) <- data_t[1,]
+data_t <- data_t[-1,]
+data_t <- data.frame(data_t)
+
+# subset the dataframe to variables of interest 
+# for each immune marker, choose the appropriate rows - can hover over R to get the column number when viewing
+data_t_rownames = rownames(data_t)
+data2 <- data_t[c(10,29,344,345,346,347,348,349,350,351,352,353,354,355,356,357)]
+#add row header as a column
+data2$studyid = c(data_t_rownames)
+
+
+
+```
+
+
+```{r}
+# Create summary data for one immune marker, one paper
+
+# Estimate the sample mean and standard deviation using the QE method for control 
+
+data3 <- data2[11, ]
+
+meansd <- qe.mean.sd(min.val = as.numeric(data3$l_range_CHI3L.1_con), q1.val = as.numeric(data3$l_iqr_CHI3L.1_con), med.val = as.numeric(data3$med_CHI3L.1_con), q3.val = as.numeric(data3$u_iqr_CHI3L.1_con), max.val = as.numeric(data3$u_range_CHI3L.1_con),
+    n = as.numeric(data3$n_con))
+
+meansd$est.mean
+meansd$est.sd
+
+
+```
+
+```{r}
+# store generated output into a new dataframe 
+
+data4 <- data.frame(mean = numeric(), sd = numeric(), study.id = character())
+colnames(data4) <- c("mean", "sd","study.id")
+
+data4 <- cbind(mean = meansd$est.mean, sd = meansd$est.sd, study.id = data3$studyid)
+
+```
+
+# Step 3 run a loop for all papers for a specific immune marker (do for controls first)
+
+
+```{r}
+# Step 3 run a loop for all papers for a specific immune marker (do for controls first) 
+
+# Initial part of step 2 is the same - data wrangling to subset immune marker CHI3L.1
+
+library(readxl)
+library(data.table)
+library(estmeansd)
+
+# Create a dataframe with some subsetted data from FTD meta-analysis
+
+results <-read_excel("/Users/sb930/Downloads/221225_FTD_IF_review.xlsx", sheet = 10)
+
+results
+
+results2 <- transpose(results)
+
+
+# transpose then add back in row and column headers 
+data_rownames = rownames(results)
+data_colnames = colnames(results)
+data_t <- transpose(results)
+rownames(data_t) <- data_colnames
+colnames(data_t) <- data_rownames
+colnames(data_t) <- data_t[1,]
+data_t <- data_t[-1,]
+data_t <- data.frame(data_t)
+
+# subset the dataframe to variables of interest 
+# for each immune marker, choose the appropriate rows - can hover over R to get the column number when viewing
+data_t_rownames = rownames(data_t)
+data2_con <- data_t[c(10,346,347,348,349,350)]
+data2_ftd <- data_t[c(29,353,354,355,356,357)]
+#add row header as a column
+data2_con$studyid = c(data_t_rownames)
+data2_ftd$studyid = c(data_t_rownames)
+
+```
+
+
+```{r}
+
+# if statement based on step 2 for comple cases only (i.e. median, range and IQR) for controls
+
+columns <- c("mean","sd","study.id")
+data5_completes <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(data5_completes) <- columns
+
+data3_completes <- subset(data2_con, complete.cases(data2_con[, c("l_range_CHI3L.1_con", "l_iqr_CHI3L.1_con", "u_iqr_CHI3L.1_con", "u_range_CHI3L.1_con")]))
+
+# Loop through all rows of the data frame "data2"
+for (i in 1:nrow(data3_completes)) {
+  # Extract the current row
+  row <- data3_completes[i, ]
+  
+  # Compute the mean and standard deviation using the qe.mean.sd() function
+    meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_CHI3L.1_con), q1.val = as.numeric(row$l_iqr_CHI3L.1_con), med.val = as.numeric(row$med_CHI3L.1_con), q3.val = as.numeric(row$u_iqr_CHI3L.1_con), max.val = as.numeric(row$u_range_CHI3L.1_con), n = as.numeric(row$n_con))
+  
+  # Store the results in the results data frame
+  # data5_completes <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+  data5_completes <- rbind(data5_completes, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+}
+  
+print(data5_completes)
+
+
+
+
+
+```
+```{r}
+# now loop through the incomplete cases for controls
+
+columns <- c("mean","sd","study.id")
+data5_incompletes <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(data5_incompletes) <- columns
+
+
+data3 <- subset(data2_con, is.na(l_range_CHI3L.1_con) & is.na(u_range_CHI3L.1_con) & !is.na(med_CHI3L.1_con))
+data3_incompletes <- subset (data3, select = -l_range_CHI3L.1_con)
+data3_incompletes <- subset (data3_incompletes,  select = -u_range_CHI3L.1_con)
+# data3_incompletes <- data2[is.na(data2$l_range_CHI3L.1_con),complete.cases(data2[, c("l_iqr_CHI3L.1_con", "u_iqr_CHI3L.1_con")] ]
+
+
+# Loop through all rows of the data frame "data2"
+# for (i in 1:nrow(data3_incompletes)) {
+#   # Extract the current row
+#   row <- data3_incompletes[i, ]
+#   
+#   # Compute the mean and standard deviation using the qe.mean.sd() function
+#     meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_CHI3L.1_con), med.val = as.numeric(row$med_CHI3L.1_con), q3.val = as.numeric(row$u_iqr_CHI3L.1_con), n = as.numeric(row$n_con))
+#   
+#   # Store the results in the results data frame
+#   data5_incompletes <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+# }
+
+for (i in 1:nrow(data3_incompletes)) {
+  print(i)  # Debug statement
+  # Extract the current row
+  row <- data3_incompletes[i, ]
+  
+  # Compute the mean and standard deviation using the qe.mean.sd() function
+    meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_CHI3L.1_con), med.val = as.numeric(row$med_CHI3L.1_con), q3.val = as.numeric(row$u_iqr_CHI3L.1_con), n = as.numeric(row$n_con))
+  
+  # # Store the results in the results data frame
+  # data5_incompletes <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+    # Store the results in the results data frame
+  data5_incompletes <- rbind(data5_incompletes, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+}
+  
+print(data5_incompletes)
+
+```
+
+```{r}
+# Step 3 final part a - create combined dataframe of estimated values
+
+# Combine the data frames
+data5_all <- rbind(data5_completes, data5_incompletes)
+
+# Order the data frame by the "study.id" column
+data5_all <- data5_all[order(data5_all$study.id),]
+
+```
+
+
+```{r}
+# Step 3 final part b - merge estimated values with extracted values
+
+# Subset data_t to include only rows where "mean_CHI3L.1_con" and "SD_CHI3L.1_con" have a value
+data_t_CHI3L <- data_t[!is.na(data_t$mean_CHI3L.1_con) & !is.na(data_t$SD_CHI3L.1_con),]
+
+# Extract only the "mean_CHI3L.1_con" and "SD_CHI3L.1_con" columns
+data_t_CHI3L <- data_t_CHI3L[, c("mean_CHI3L.1_con", "SD_CHI3L.1_con")]
+
+# Extract the row names from data_t
+row_names <- rownames(data_t_CHI3L)
+
+# Create a "study.id" column in data_t_CHI3L using the row names
+data_t_CHI3L$study.id <- row_names
+
+# Rename the "mean" column to "mean_CHI3L.1_con"
+names(data5_all)[names(data5_all) == "mean"] <- "mean_CHI3L.1_con"
+
+# Rename the "sd" column to "SD_CHI3L.1_con"
+names(data5_all)[names(data5_all) == "sd"] <- "SD_CHI3L.1_con"
+
+# Add column "value" to both tables so source of mean and sd is clear
+# Add a "value" column to the data5_all data frame with estimated
+data5_all$value <- "estimated"
+# Add a "value" column to the data_t_CHI3L data frame with extracted
+data_t_CHI3L$value <- "extracted"
+
+
+# Combine data_t_CHI3L with data5_all
+CHI3L_combined <- rbind(data_t_CHI3L, data5_all)
+
+# Reorder the rows based on the "studyid" column
+CHI3L_combined <- CHI3L_combined[order(CHI3L_combined$study.id),]
+
+# For rows with the same "studyid" value, use the values from data_t_CHI3L
+CHI3L_combined <- unique(CHI3L_combined, by = "studyid", fromLast = TRUE)
+
+
+```
+
+
+
+```{r}
+# Step 4 run a loop for all papers for all immune markers? controls and ftd
+
+```
