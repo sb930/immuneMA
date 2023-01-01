@@ -1,0 +1,350 @@
+
+---
+title: "CHI3L1_analysis_v2.Rmd"
+author: "Sanjay"
+date: "24/12/2022"
+output: html_document
+---
+
+# Step 1: run a loop for CHI3L for controls to predict mean and sd where mdian, IQR, range available
+
+```{r}
+# Step 3 run a loop for all papers for a specific immune marker (do for controls first) 
+
+# Initial part of step 2 is the same - data wrangling to subset immune marker CHI3L.1
+
+library(readxl)
+library(data.table)
+library(estmeansd)
+library (dplyr)
+
+# Create a dataframe with some subsetted data from FTD meta-analysis
+
+results <-read_excel("/Users/sb930/Downloads/221225_FTD_IF_review.xlsx", sheet = 10)
+
+results
+
+results2 <- transpose(results)
+
+
+# transpose then add back in row and column headers 
+data_rownames = rownames(results)
+data_colnames = colnames(results)
+data_t <- transpose(results)
+rownames(data_t) <- data_colnames
+colnames(data_t) <- data_rownames
+colnames(data_t) <- data_t[1,]
+data_t <- data_t[-1,]
+data_t <- data.frame(data_t)
+
+# subset the dataframe to variables of interest 
+# for each immune marker, choose the appropriate rows - can hover over R to get the column number when viewing
+data_t_rownames = rownames(data_t)
+
+CHI3L1_df2_con <- data_t %>%
+  select(n_con, med_CHI3L.1_con, l_iqr_CHI3L.1_con, u_iqr_CHI3L.1_con, l_range_CHI3L.1_con, u_range_CHI3L.1_con)
+
+CHI3L1_df2_ftd <- data_t %>%
+  select(n_ftd, med_CHI3L.1_ftd, l_iqr_CHI3L.1_ftd, u_iqr_CHI3L.1_ftd, l_range_CHI3L.1_ftd, u_range_CHI3L.1_ftd)
+
+# Alternative way of subsetting columns manually rather than using dplyr
+# CHI3L1_df2_con <- data_t[c(10,346,347,348,349,350)]
+# CHI3L1_df2_ftd <- data_t[c(29,353,354,355,356,357)]
+
+#add row header as a column
+CHI3L1_df2_con$studyid = c(data_t_rownames)
+CHI3L1_df2_ftd$studyid = c(data_t_rownames)
+
+```
+
+
+```{r}
+
+# if statement based on step 2 for comple cases only (i.e. median, range and IQR) for controls
+
+columns <- c("mean","sd","study.id","n_con")
+CHI3L1_df4_completes_con <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(CHI3L1_df4_completes_con) <- columns
+
+CHI3L1_df3_completes_con <- subset(CHI3L1_df2_con, complete.cases(CHI3L1_df2_con[, c("l_range_CHI3L.1_con", "l_iqr_CHI3L.1_con", "u_iqr_CHI3L.1_con", "u_range_CHI3L.1_con")]))
+
+# Loop through all rows of the data frame "data2"
+for (i in 1:nrow(CHI3L1_df3_completes_con)) {
+  # Extract the current row
+  row <- CHI3L1_df3_completes_con[i, ]
+  
+  # Compute the mean and standard deviation using the qe.mean.sd() function
+    meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_CHI3L.1_con), q1.val = as.numeric(row$l_iqr_CHI3L.1_con), med.val = as.numeric(row$med_CHI3L.1_con), q3.val = as.numeric(row$u_iqr_CHI3L.1_con), max.val = as.numeric(row$u_range_CHI3L.1_con), n = as.numeric(row$n_con))
+  
+  # Store the results in the results data frame
+  # CHI3L1_df4_completes_con <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+  CHI3L1_df4_completes_con <- rbind(CHI3L1_df4_completes_con, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_con = row$n_con))
+}
+  
+print(CHI3L1_df4_completes_con)
+
+
+
+
+
+```
+```{r}
+# now loop through the incomplete cases for controls
+
+columns <- c("mean","sd","study.id","n_con")
+CHI3L1_df4_incompletes_con <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(CHI3L1_df4_incompletes_con) <- columns
+
+
+CHI3L1_df3_con <- subset(CHI3L1_df2_con, is.na(l_range_CHI3L.1_con) & is.na(u_range_CHI3L.1_con) & !is.na(med_CHI3L.1_con))
+CHI3L1_df3_incompletes_con <- subset (CHI3L1_df3_con, select = -l_range_CHI3L.1_con)
+CHI3L1_df3_incompletes_con <- subset (CHI3L1_df3_incompletes_con,  select = -u_range_CHI3L.1_con)
+
+for (i in 1:nrow(CHI3L1_df3_incompletes_con)) {
+  print(i)  # Debug statement
+  # Extract the current row
+  row <- CHI3L1_df3_incompletes_con[i, ]
+  
+  # Compute the mean and standard deviation using the qe.mean.sd() function
+    meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_CHI3L.1_con), med.val = as.numeric(row$med_CHI3L.1_con), q3.val = as.numeric(row$u_iqr_CHI3L.1_con), n = as.numeric(row$n_con))
+  
+  # # Store the results in the results data frame
+  # CHI3L1_df4_incompletes_con <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+    # Store the results in the results data frame
+  CHI3L1_df4_incompletes_con <- rbind(CHI3L1_df4_incompletes_con, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_con = row$n_con))
+}
+  
+print(CHI3L1_df4_incompletes_con)
+
+```
+
+```{r}
+# Step 3 final part a - create combined dataframe of estimated values
+
+# Combine the data frames
+CHI3L1_df4_all_con <- rbind(CHI3L1_df4_completes_con, CHI3L1_df4_incompletes_con)
+
+# Order the data frame by the "study.id" column
+CHI3L1_df4_all_con <- CHI3L1_df4_all_con[order(CHI3L1_df4_all_con$study.id),]
+
+```
+
+
+```{r}
+# Step 3 final part b - merge estimated values with extracted values
+
+# Subset data_t to include only rows where "mean_CHI3L.1_con" and "SD_CHI3L.1_con" have a value
+data_t_CHI3L1_con <- data_t[!is.na(data_t$mean_CHI3L.1_con) & !is.na(data_t$SD_CHI3L.1_con),]
+
+# Extract only the "mean_CHI3L.1_con" and "SD_CHI3L.1_con" columns
+data_t_CHI3L1_con <- data_t_CHI3L1_con[, c("mean_CHI3L.1_con", "SD_CHI3L.1_con", "n_con")]
+
+# Extract the row names from data_t
+row_names <- rownames(data_t_CHI3L1_con)
+
+# Create a "study.id" column in data_t_CHI3L1_con using the row names
+data_t_CHI3L1_con$study.id <- row_names
+
+# Rename the "mean" column to "mean_CHI3L.1_con"
+names(CHI3L1_df4_all_con)[names(CHI3L1_df4_all_con) == "mean"] <- "mean_CHI3L.1_con"
+
+# Rename the "sd" column to "SD_CHI3L.1_con"
+names(CHI3L1_df4_all_con)[names(CHI3L1_df4_all_con) == "sd"] <- "SD_CHI3L.1_con"
+
+# Add column "value" to both tables so source of mean and sd is clear
+# Add a "value" column to the CHI3L1_df4_all_con data frame with estimated
+CHI3L1_df4_all_con$value <- "estimated"
+# Add a "value" column to the data_t_CHI3L1_con data frame with extracted
+data_t_CHI3L1_con$value <- "extracted"
+
+
+# Combine data_t_CHI3L1_con with CHI3L1_df4_all_con
+CHI3L1_combined_con <- rbind(data_t_CHI3L1_con, CHI3L1_df4_all_con)
+
+# Reorder the rows based on the "studyid" column
+CHI3L1_combined_con <- CHI3L1_combined_con[order(CHI3L1_combined_con$study.id),]
+
+# For rows with the same "studyid" value, use the values from data_t_CHI3L1_con
+CHI3L1_combined_con <- unique(CHI3L1_combined_con, by = "studyid", fromLast = TRUE)
+
+
+```
+
+
+# Step 2 add repeat for ftd 
+
+```{r}
+
+# if statement based on step 2 for comple cases only (i.e. median, range and IQR) for controls
+
+columns <- c("mean","sd","study.id", "n_ftd")
+CHI3L1_df4_completes_ftd <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(CHI3L1_df4_completes_ftd) <- columns
+
+CHI3L1_df3_completes_ftd <- subset(CHI3L1_df2_ftd, complete.cases(CHI3L1_df2_ftd[, c("l_range_CHI3L.1_ftd", "l_iqr_CHI3L.1_ftd", "u_iqr_CHI3L.1_ftd", "u_range_CHI3L.1_ftd")]))
+
+# Loop through all rows of the data frame "data2"
+for (i in 1:nrow(CHI3L1_df3_completes_ftd)) {
+  # Extract the current row
+  row <- CHI3L1_df3_completes_ftd[i, ]
+  
+  # Compute the mean and standard deviation using the qe.mean.sd() function
+    meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_CHI3L.1_ftd), q1.val = as.numeric(row$l_iqr_CHI3L.1_ftd), med.val = as.numeric(row$med_CHI3L.1_ftd), q3.val = as.numeric(row$u_iqr_CHI3L.1_ftd), max.val = as.numeric(row$u_range_CHI3L.1_ftd), n = as.numeric(row$n_ftd))
+  
+  # Store the results in the results data frame
+  # CHI3L1_df4_completes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+  CHI3L1_df4_completes_ftd <- rbind(CHI3L1_df4_completes_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd= row$n_ftd))
+}
+  
+print(CHI3L1_df4_completes_ftd)
+
+
+
+
+
+```
+```{r}
+# now loop through the incomplete cases for controls
+
+columns <- c("mean","sd","study.id","n_ftd")
+CHI3L1_df4_incompletes_ftd <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(CHI3L1_df4_incompletes_ftd) <- columns
+
+
+CHI3L1_df3_ftd <- subset(CHI3L1_df2_ftd, is.na(l_range_CHI3L.1_ftd) & is.na(u_range_CHI3L.1_ftd) & !is.na(med_CHI3L.1_ftd))
+CHI3L1_df3_incompletes_ftd <- subset (CHI3L1_df3_ftd, select = -l_range_CHI3L.1_ftd)
+CHI3L1_df3_incompletes_ftd <- subset (CHI3L1_df3_incompletes_ftd,  select = -u_range_CHI3L.1_ftd)
+
+for (i in 1:nrow(CHI3L1_df3_incompletes_ftd)) {
+  print(i)  # Debug statement
+  # Extract the current row
+  row <- CHI3L1_df3_incompletes_ftd[i, ]
+  
+  # Compute the mean and standard deviation using the qe.mean.sd() function
+    meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_CHI3L.1_ftd), med.val = as.numeric(row$med_CHI3L.1_ftd), q3.val = as.numeric(row$u_iqr_CHI3L.1_ftd), n = as.numeric(row$n_ftd))
+  
+  # # Store the results in the results data frame
+  # CHI3L1_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+    # Store the results in the results data frame
+  CHI3L1_df4_incompletes_ftd <- rbind(CHI3L1_df4_incompletes_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
+}
+  
+print(CHI3L1_df4_incompletes_ftd)
+
+```
+
+```{r}
+# Step 3 final part a - create combined dataframe of estimated values
+
+# Combine the data frames
+CHI3L1_df4_all_ftd <- rbind(CHI3L1_df4_completes_ftd, CHI3L1_df4_incompletes_ftd)
+
+# Order the data frame by the "study.id" column
+CHI3L1_df4_all_ftd <- CHI3L1_df4_all_ftd[order(CHI3L1_df4_all_ftd$study.id),]
+
+```
+
+
+```{r}
+# Step 3 final part b - merge estimated values with extracted values
+
+# Subset data_t to include only rows where "mean_CHI3L.1_ftd" and "SD_CHI3L.1_ftd" have a value
+data_t_CHI3L1_ftd <- data_t[!is.na(data_t$mean_CHI3L.1_ftd) & !is.na(data_t$SD_CHI3L.1_ftd),]
+
+# Extract only the "mean_CHI3L.1_ftd" and "SD_CHI3L.1_ftd" columns
+data_t_CHI3L1_ftd <- data_t_CHI3L1_ftd[, c("mean_CHI3L.1_ftd", "SD_CHI3L.1_ftd", "n_ftd")]
+
+# Extract the row names from data_t
+row_names <- rownames(data_t_CHI3L1_ftd)
+
+# Create a "study.id" column in data_t_CHI3L1_ftd using the row names
+data_t_CHI3L1_ftd$study.id <- row_names
+
+# Rename the "mean" column to "mean_CHI3L.1_ftd"
+names(CHI3L1_df4_all_ftd)[names(CHI3L1_df4_all_ftd) == "mean"] <- "mean_CHI3L.1_ftd"
+
+# Rename the "sd" column to "SD_CHI3L.1_ftd"
+names(CHI3L1_df4_all_ftd)[names(CHI3L1_df4_all_ftd) == "sd"] <- "SD_CHI3L.1_ftd"
+
+# Add column "value" to both tables so source of mean and sd is clear
+# Add a "value" column to the CHI3L1_df4_all_ftd data frame with estimated
+CHI3L1_df4_all_ftd$value <- "estimated"
+# Add a "value" column to the data_t_CHI3L1_ftd data frame with extracted
+data_t_CHI3L1_ftd$value <- "extracted"
+
+
+# Combine data_t_CHI3L1_ftd with CHI3L1_df4_all_ftd
+CHI3L1_combined_ftd <- rbind(data_t_CHI3L1_ftd, CHI3L1_df4_all_ftd)
+
+# Reorder the rows based on the "studyid" column
+CHI3L1_combined_ftd <- CHI3L1_combined_ftd[order(CHI3L1_combined_ftd$study.id),]
+
+# For rows with the same "studyid" value, use the values from data_t_CHI3L1_ftd
+CHI3L1_combined_ftd <- unique(CHI3L1_combined_ftd, by = "studyid", fromLast = TRUE)
+
+```
+
+
+# Step 3 add effect size calculations
+
+```{r}
+# load libraries 
+library(metafor)
+library(dplyr)
+library(robumeta)
+library(data.table)
+```
+
+
+
+```{r}
+# combine control and FTD data frames 
+CHI3L1_combined <- full_join(CHI3L1_combined_con, CHI3L1_combined_ftd, by="study.id")
+
+# make data frame columns except study id numeric
+CHI3L1_combined <- mutate_at(CHI3L1_combined, vars(contains("_")), function(x) as.numeric(as.character(x)))
+
+```
+
+
+```{r}
+# use escalc to calculate effect sizes 
+
+# change name of immune marker for each of the terms
+
+df2 <- escalc(data=CHI3L1_combined, measure="SMD", m2i=mean_CHI3L.1_con, m1i=mean_CHI3L.1_ftd,
+                sd2i=SD_CHI3L.1_con, sd1i=SD_CHI3L.1_ftd,
+                n2i=n_con, n1i=n_ftd,slab=paste("ID", study.id))
+
+df2
+
+```
+```{r}
+#random effects model 
+res <- rma (yi, vi, method="REML", data=df2)
+```
+
+
+```{r}
+# construct forest plot 
+
+forest(res) 
+
+```
+
+
+```{r}
+# construct funnel plot 
+
+funnel(res) 
+
+```
+
+```{r}
+# heterogeneity measures
+
+res.CA  <- rma(yi, vi, method="HE", data=df2)
+
+res.CA
+
+```
