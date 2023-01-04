@@ -1,12 +1,16 @@
 
 ---
-title: "nfl_analysis_v2.Rmd"
+title: "nfl_analysis_v5.Rmd"
 author: "Sanjay"
 date: "24/12/2022"
 output: html_document
 ---
 
-# Step 1: run a loop for CHI3L for controls to predict mean and sd where mdian, IQR, range available
+# corrections from v4
+# correction 1 correcting the labelling of estimated values for control and ftd  
+# correction 2 removing the completes dataframe to prevent duplication with incompletes2 dataframe - subsequent dataframes not renamed for back compatability
+
+# Step 1: run a loop for nfl for controls to predict mean and sd where mdian, IQR, range available
 
 ```{r}
 # Step 3 run a loop for all papers for a specific immune marker (do for controls first) 
@@ -20,7 +24,7 @@ library (dplyr)
 
 # Create a dataframe with some subsetted data from FTD meta-analysis
 
-results <-read_excel("/Users/sb930/Downloads/221225_FTD_IF_review.xlsx", sheet = 6)
+results <-read_excel("/Users/sb930/Documents/PhD/MND_FTD_Metaanalysis/FTD_IF_review.xlsx", sheet = 10)
 # sheet 10 is final sheet with Yusuf's results. Use mine for now
 
 results
@@ -58,38 +62,6 @@ nfl_df2_ftd$studyid = c(data_t_rownames)
 
 ```
 
-
-```{r}
-
-# if statement based on step 2 for complete cases only (i.e. median, range and IQR) for controls
-
-columns <- c("mean","sd","study.id","n_con")
-nfl_df4_completes_con <- (matrix(nrow = 0, ncol = length(columns)))
-colnames(nfl_df4_completes_con) <- columns
-
-nfl_df3_completes_con <- subset(nfl_df2_con, complete.cases(nfl_df2_con[, c("l_range_nfl_con", "l_iqr_nfl_con", "u_iqr_nfl_con", "u_range_nfl_con")]))
-
-# Loop through all rows of the data frame "data2"
-for (i in 1:nrow(nfl_df3_completes_con)) {
-  # Extract the current row
-  row <- nfl_df3_completes_con[i, ]
-  
-  # Compute the mean and standard deviation using the qe.mean.sd() function
-    meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_nfl_con), q1.val = as.numeric(row$l_iqr_nfl_con), med.val = as.numeric(row$med_nfl_con), q3.val = as.numeric(row$u_iqr_nfl_con), max.val = as.numeric(row$u_range_nfl_con), n = as.numeric(row$n_con))
-  
-  # Store the results in the results data frame
-  # nfl_df4_completes_con <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
-  nfl_df4_completes_con <- rbind(nfl_df4_completes_con, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_con = row$n_con))
-}
-  
-print(nfl_df4_completes_con)
-
-
-
-
-
-```
-
 ```{r}
 # now loop through the incomplete cases for controls
 
@@ -110,8 +82,11 @@ nfl_df3_incompletes1_con <- subset (nfl_df3_incompletes1_con, select = -c(l_rang
 # select median, IQR and range columns 
 nfl_df3_incompletes2_con <- subset(nfl_df2_con, !is.na(l_range_nfl_con) & !is.na(u_range_nfl_con) & !is.na(med_nfl_con) & !is.na(l_iqr_nfl_con) & !is.na(u_iqr_nfl_con))
 
+# nfl_df3_completes_con <- subset(nfl_df2_con, complete.cases(nfl_df2_con[, c("l_range_nfl_con", "l_iqr_nfl_con", "med_nfl_con", "u_iqr_nfl_con", "u_range_nfl_con")]))
+
 # select median and range columns then remove IQR columns to prevent estmeansd errors 
 nfl_df3_incompletes3_con <- subset(nfl_df2_con, !is.na(l_range_nfl_con) & !is.na(u_range_nfl_con) & !is.na(med_nfl_con) & is.na(l_iqr_nfl_con) & is.na(u_iqr_nfl_con))
+nfl_df3_incompletes3_con <- subset (nfl_df3_incompletes3_con, select = -c(l_iqr_nfl_con, u_iqr_nfl_con))
 
 # first loop for median and IQR
 
@@ -189,8 +164,15 @@ print(nfl_df4_incompletes3_con)
 # Bind the rows of the three tables together
 nfl_df4_incompletes_con <- rbind(nfl_df4_incompletes1_con, nfl_df4_incompletes2_con, nfl_df4_incompletes3_con)
 
-nfl_df4_incompletes_con$sd <- format(as.numeric(nfl_df4_incompletes_con$sd), scientific = FALSE)
-
+for (i in 1:nrow(nfl_df4_incompletes_con)) {
+  if (nrow(nfl_df4_incompletes_con) == 0) {
+      # If the subset command returned no values, skip the rest of the code chunk
+      next
+    } else {
+      nfl_df4_incompletes_con$sd <- format(as.numeric(nfl_df4_incompletes_con$sd), scientific = FALSE)
+  }
+}
+  
 print(nfl_df4_incompletes_con)  
 
 ```
@@ -200,10 +182,25 @@ print(nfl_df4_incompletes_con)
 # Step 3 final part a - create combined dataframe of estimated values
 
 # Combine the data frames
-nfl_df4_all_con <- rbind(nfl_df4_completes_con, nfl_df4_incompletes_con)
+# nfl_df4_all_con <- rbind(nfl_df4_completes_con, nfl_df4_incompletes_con)
+
+# Rename dataframe for further processes
+nfl_df4_all_con <- nfl_df4_incompletes_con
 
 # Order the data frame by the "study.id" column
-nfl_df4_all_con <- nfl_df4_all_con[order(nfl_df4_all_con$study.id),]
+# for (i in 1:nrow(nfl_df4_all_con)) {
+#   if (nrow(nfl_df4_all_con) == 0) {
+#       # If the subset command returned no values, skip the rest of the code chunk
+#       next
+#     } else {
+#       nfl_df4_all_con <- nfl_df4_all_con[order(nfl_df4_all_con$study.id),]
+#   }
+# }
+
+# Order the data frame by the "study.id" column redone as a if x>0 statement
+if (nrow(nfl_df4_all_con) > 0) {
+      nfl_df4_all_con <- nfl_df4_all_con[order(nfl_df4_all_con$study.id),]
+}
 
 ```
 
@@ -233,7 +230,7 @@ names(nfl_df4_all_con)[names(nfl_df4_all_con) == "sd"] <- "SD_nfl_con"
 
 # Add a "value" column to the nfl_df4_all_con data frame with estimated
 if (nrow(nfl_df4_all_con) > 0) {
-  nfl_df4_all_con$value <- "extracted"
+  nfl_df4_all_con$value <- "estimated"
 }
 
 # Add a "value" column to the data_t_nfl_con data frame with extracted
@@ -258,32 +255,6 @@ nfl_combined_con <- unique(nfl_combined_con, by = "studyid", fromLast = TRUE)
 
 # Step 2 add repeat for ftd 
 
-```{r}
-
-# if statement based on step 2 for comple cases only (i.e. median, range and IQR) for controls
-
-columns <- c("mean","sd","study.id", "n_ftd")
-nfl_df4_completes_ftd <- (matrix(nrow = 0, ncol = length(columns)))
-colnames(nfl_df4_completes_ftd) <- columns
-
-nfl_df3_completes_ftd <- subset(nfl_df2_ftd, complete.cases(nfl_df2_ftd[, c("l_range_nfl_ftd", "l_iqr_nfl_ftd", "u_iqr_nfl_ftd", "u_range_nfl_ftd")]))
-
-# Loop through all rows of the data frame "data2"
-for (i in 1:nrow(nfl_df3_completes_ftd)) {
-  # Extract the current row
-  row <- nfl_df3_completes_ftd[i, ]
-  
-  # Compute the mean and standard deviation using the qe.mean.sd() function
-    meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_nfl_ftd), q1.val = as.numeric(row$l_iqr_nfl_ftd), med.val = as.numeric(row$med_nfl_ftd), q3.val = as.numeric(row$u_iqr_nfl_ftd), max.val = as.numeric(row$u_range_nfl_ftd), n = as.numeric(row$n_ftd))
-  
-  # Store the results in the results data frame
-  # nfl_df4_completes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
-  nfl_df4_completes_ftd <- rbind(nfl_df4_completes_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd= row$n_ftd))
-}
-  
-print(nfl_df4_completes_ftd)
-
-```
 
 ```{r}
 # now loop through the incomplete cases for ftd patients
@@ -307,6 +278,7 @@ nfl_df3_incompletes2_ftd <- subset(nfl_df2_ftd, !is.na(l_range_nfl_ftd) & !is.na
 
 # select median and range columns then remove IQR columns to prevent estmeansd errors 
 nfl_df3_incompletes3_ftd <- subset(nfl_df2_ftd, !is.na(l_range_nfl_ftd) & !is.na(u_range_nfl_ftd) & !is.na(med_nfl_ftd) & is.na(l_iqr_nfl_ftd) & is.na(u_iqr_nfl_ftd))
+nfl_df3_incompletes3_ftd <- subset (nfl_df3_incompletes3_ftd, select = -c(l_iqr_nfl_ftd, u_iqr_nfl_ftd))
 
 # first loop for median and IQR
 
@@ -384,156 +356,45 @@ print(nfl_df4_incompletes3_ftd)
 # Bind the rows of the three tables together
 nfl_df4_incompletes_ftd <- rbind(nfl_df4_incompletes1_ftd, nfl_df4_incompletes2_ftd, nfl_df4_incompletes3_ftd)
 
-nfl_df4_incompletes_ftd$sd <- format(as.numeric(nfl_df4_incompletes_ftd$sd), scientific = FALSE)
+for (i in 1:nrow(nfl_df4_incompletes_ftd)) {
+  if (nrow(nfl_df4_incompletes_ftd) == 0) {
+      # If the subset command returned no values, skip the rest of the code chunk
+      next
+    } else {
+      nfl_df4_incompletes_ftd$sd <- format(as.numeric(nfl_df4_incompletes_ftd$sd), scientific = FALSE)
+  }
+}
+
 
 print(nfl_df4_incompletes_ftd)  
 
 ```
 
 
-```{r}
-# Commented out because it doesn't work
-
-# # now loop through the incomplete cases for controls
-# 
-# columns <- c("mean","sd","study.id","n_ftd")
-# nfl_df4_incompletes1_ftd <- (matrix(nrow = 0, ncol = length(columns)))
-# colnames(nfl_df4_incompletes1_ftd) <- columns
-# nfl_df4_incompletes2_ftd <- (matrix(nrow = 0, ncol = length(columns)))
-# colnames(nfl_df4_incompletes2_ftd) <- columns
-# nfl_df4_incompletes3_ftd <- (matrix(nrow = 0, ncol = length(columns)))
-# colnames(nfl_df4_incompletes3_ftd) <- columns
-# nfl_df4_incompletes_ftd <- (matrix(nrow = 0, ncol = length(columns)))
-# colnames(nfl_df4_incompletes_ftd) <- columns
-# 
-# # select median and IQR columns then remove range columns to prevent estmeansd errors 
-# nfl_df3_incompletes1_ftd <- subset(nfl_df2_ftd, is.na(l_range_nfl_ftd) & is.na(u_range_nfl_ftd) & !is.na(med_nfl_ftd) & !is.na(l_iqr_nfl_ftd) & !is.na(u_iqr_nfl_ftd))
-# nfl_df3_incompletes1_ftd <- subset (nfl_df3_incompletes1_ftd, select = -c(l_range_nfl_ftd, u_range_nfl_ftd))
-# 
-# # select median, IQR and range columns 
-# nfl_df3_incompletes2_ftd <- subset(nfl_df2_ftd, !is.na(l_range_nfl_ftd) & !is.na(u_range_nfl_ftd) & !is.na(med_nfl_ftd) & !is.na(l_iqr_nfl_ftd) & !is.na(u_iqr_nfl_ftd))
-# 
-# # select median and range columns then remove IQR columns to prevent estmeansd errors 
-# nfl_df3_incompletes3_ftd <- subset(nfl_df2_ftd, !is.na(l_range_nfl_ftd) & !is.na(u_range_nfl_ftd) & !is.na(med_nfl_ftd) & is.na(l_iqr_nfl_ftd) & is.na(u_iqr_nfl_ftd))
-# 
-# # first loop for median and IQR
-# 
-# if (nrow(nfl_df3_incompletes1_ftd) == 0) {
-#   # If the subset command returned no values, skip the rest of the code chunk
-#   next
-# } else {
-#   for (i in 1:nrow(nfl_df3_incompletes1_ftd)) {
-#     print(i)  # Debug statement
-#     # Extract the current row
-#     row <- nfl_df3_incompletes1_ftd[i, ]
-#   
-#     # Compute the mean and standard deviation using the qe.mean.sd() function
-#       meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_nfl_ftd), med.val = as.numeric(row$med_nfl_ftd), q3.val = as.numeric(row$u_iqr_nfl_ftd), n = as.numeric(row$n_ftd))
-#   
-#     # # Store the results in the results data frame
-#     # nfl_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
-#       # Store the results in the results data frame
-#     nfl_df4_incompletes1_ftd <- rbind(nfl_df4_incompletes1_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
-#   }
-# }
-#   
-# print(nfl_df4_incompletes1_ftd)
-# 
-# # second loop for median, IQR and range 
-# 
-# if (nrow(nfl_df3_incompletes2_ftd) == 0) {
-#   # If the subset command returned no values, skip the rest of the code chunk
-#   next
-# } else {
-#   for (i in 1:nrow(nfl_df3_incompletes2_ftd)) {
-#     print(i)  # Debug statement
-#     # Extract the current row
-#     row <- nfl_df3_incompletes2_ftd[i, ]
-#   
-#     # Compute the mean and standard deviation using the qe.mean.sd() function
-#       meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_nfl_ftd), q1.val = as.numeric(row$l_iqr_nfl_ftd), med.val = as.numeric(row$med_nfl_ftd), q3.val = as.numeric(row$u_iqr_nfl_ftd), max.val = as.numeric(row$u_range_nfl_ftd), n = as.numeric(row$n_ftd))
-#   
-#     # # Store the results in the results data frame
-#     # nfl_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
-#       # Store the results in the results data frame
-#     nfl_df4_incompletes2_ftd <- rbind(nfl_df4_incompletes2_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
-#   }
-# }
-#   
-# print(nfl_df4_incompletes2_ftd)  
-# 
-# # third loop for median and range 
-# 
-# if (nrow(nfl_df3_incompletes3_ftd) == 0) {
-#   # If the subset command returned no values, skip the rest of the code chunk
-#   next
-# } else {
-#   for (i in 1:nrow(nfl_df3_incompletes3_ftd)) {
-#     print(i)  # Debug statement
-#     # Extract the current row
-#     row <- nfl_df3_incompletes3_ftd[i, ]
-#   
-#     # Compute the mean and standard deviation using the qe.mean.sd() function
-#       meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_nfl_ftd), med.val = as.numeric(row$med_nfl_ftd), max.val = as.numeric(row$u_range_nfl_ftd), n = as.numeric(row$n_ftd))
-#   
-#     # # Store the results in the results data frame
-#     # nfl_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
-#       # Store the results in the results data frame
-#     nfl_df4_incompletes3_ftd <- rbind(nfl_df4_incompletes3_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
-#   }
-# }
-#   
-# print(nfl_df4_incompletes3_ftd)  
-# 
-# # Bind the rows of the three tables together
-# nfl_df4_incompletes_ftd <- rbind(nfl_df4_incompletes1_ftd, nfl_df4_incompletes2_ftd, nfl_df4_incompletes3_ftd)
-# 
-# print(nfl_df4_incompletes_ftd)  
-
-```
-
-
-
-```{r}
-# commented out because code doesn't work
-
-# # now loop through the incomplete cases for ftd
-# 
-# columns <- c("mean","sd","study.id","n_ftd")
-# nfl_df4_incompletes_ftd <- (matrix(nrow = 0, ncol = length(columns)))
-# colnames(nfl_df4_incompletes_ftd) <- columns
-# 
-# 
-# nfl_df3_ftd <- subset(nfl_df2_ftd, is.na(l_range_nfl_ftd) & is.na(u_range_nfl_ftd) & !is.na(med_nfl_ftd))
-# nfl_df3_incompletes_ftd <- subset (nfl_df3_ftd, select = -l_range_nfl_ftd)
-# nfl_df3_incompletes_ftd <- subset (nfl_df3_incompletes_ftd,  select = -u_range_nfl_ftd)
-# 
-# for (i in 1:nrow(nfl_df3_incompletes_ftd)) {
-#   print(i)  # Debug statement
-#   # Extract the current row
-#   row <- nfl_df3_incompletes_ftd[i, ]
-#   
-#   # Compute the mean and standard deviation using the qe.mean.sd() function
-#     meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_nfl_ftd), med.val = as.numeric(row$med_nfl_ftd), q3.val = as.numeric(row$u_iqr_nfl_ftd), n = as.numeric(row$n_ftd))
-#   
-#   # # Store the results in the results data frame
-#   # nfl_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
-#     # Store the results in the results data frame
-#   nfl_df4_incompletes_ftd <- rbind(nfl_df4_incompletes_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
-# }
-#   
-# print(nfl_df4_incompletes_ftd)
-
-```
 
 ```{r}
 # Step 3 final part a - create combined dataframe of estimated values
 
 # Combine the data frames
-nfl_df4_all_ftd <- rbind(nfl_df4_completes_ftd, nfl_df4_incompletes_ftd)
+# nfl_df4_all_ftd <- rbind(nfl_df4_completes_ftd, nfl_df4_incompletes_ftd)
+
+# rename incompletes dataframe for further processing
+nfl_df4_all_ftd <- nfl_df4_incompletes_ftd
 
 # Order the data frame by the "study.id" column
-nfl_df4_all_ftd <- nfl_df4_all_ftd[order(nfl_df4_all_ftd$study.id),]
+# for (i in 1:nrow(nfl_df4_all_ftd)) {
+#   if (nrow(nfl_df4_all_ftd) == 0) {
+#       # If the subset command returned no values, skip the rest of the code chunk
+#       next
+#     } else {
+#       nfl_df4_all_ftd <- nfl_df4_all_ftd[order(nfl_df4_all_ftd$study.id),]
+#   }
+# }
+
+# Order the data frame by the "study.id" column redone as a if x>0 statement
+if (nrow(nfl_df4_all_ftd) > 0) {
+      nfl_df4_all_ftd <- nfl_df4_all_ftd[order(nfl_df4_all_ftd$study.id),]
+}
 
 ```
 
@@ -563,7 +424,7 @@ names(nfl_df4_all_ftd)[names(nfl_df4_all_ftd) == "sd"] <- "SD_nfl_ftd"
 
 # Add a "value" column to the nfl_df4_all_con data frame with estimated
 if (nrow(nfl_df4_all_ftd) > 0) {
-  nfl_df4_all_ftd$value <- "extracted"
+  nfl_df4_all_ftd$value <- "estimated"
 }
 
 # Add a "value" column to the data_t_nfl_con data frame with extracted
@@ -614,9 +475,8 @@ df2 <- escalc(data=nfl_combined, measure="SMD", m2i=mean_nfl_con, m1i=mean_nfl_f
                 sd2i=SD_nfl_con, sd1i=SD_nfl_ftd,
                 n2i=n_con, n1i=n_ftd,slab=paste("ID", study.id))
 
-df2
-
 ```
+
 ```{r}
 #random effects model 
 res <- rma (yi, vi, method="REML", data=df2)

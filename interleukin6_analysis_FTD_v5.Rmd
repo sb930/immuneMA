@@ -1,0 +1,508 @@
+
+---
+title: "interleukin6_analysis_v5.Rmd"
+author: "Sanjay"
+date: "24/12/2022"
+output: html_document
+---
+
+# corrections from v4
+# correction 1 correcting the labelling of estimated values for control and ftd  
+# correction 2 removing the completes dataframe to prevent duplication with incompletes2 dataframe - subsequent dataframes not renamed for back compatability
+
+# Step 1: run a loop for interleukin6 for controls to predict mean and sd where mdian, IQR, range available
+
+```{r}
+# Step 3 run a loop for all papers for a specific immune marker (do for controls first) 
+
+# Initial part of step 2 is the same - data wrangling to subset immune marker interleukin6
+
+library(readxl)
+library(data.table)
+library(estmeansd)
+library (dplyr)
+
+# Create a dataframe with some subsetted data from FTD meta-analysis
+
+results <-read_excel("/Users/sb930/Documents/PhD/MND_FTD_Metaanalysis/FTD_IF_review.xlsx", sheet = 10)
+# sheet 10 is final sheet with Yusuf's results. Use mine for now
+
+results
+
+results2 <- transpose(results)
+
+
+# transpose then add back in row and column headers 
+data_rownames = rownames(results)
+data_colnames = colnames(results)
+data_t <- transpose(results)
+rownames(data_t) <- data_colnames
+colnames(data_t) <- data_rownames
+colnames(data_t) <- data_t[1,]
+data_t <- data_t[-1,]
+data_t <- data.frame(data_t)
+
+# subset the dataframe to variables of interest 
+# for each immune marker, choose the appropriate rows - can hover over R to get the column number when viewing
+data_t_rownames = rownames(data_t)
+
+interleukin6_df2_con <- data_t %>%
+  select(n_con, med_interleukin6_con, l_iqr_interleukin6_con, u_iqr_interleukin6_con, l_range_interleukin6_con, u_range_interleukin6_con)
+
+interleukin6_df2_ftd <- data_t %>%
+  select(n_ftd, med_interleukin6_ftd, l_iqr_interleukin6_ftd, u_iqr_interleukin6_ftd, l_range_interleukin6_ftd, u_range_interleukin6_ftd)
+
+# Alternative way of subsetting columns manually rather than using dplyr
+# interleukin6_df2_con <- data_t[c(10,346,347,348,349,350)]
+# interleukin6_df2_ftd <- data_t[c(29,353,354,355,356,357)]
+
+#add row header as a column
+interleukin6_df2_con$studyid = c(data_t_rownames)
+interleukin6_df2_ftd$studyid = c(data_t_rownames)
+
+```
+
+```{r}
+# now loop through the incomplete cases for controls
+
+columns <- c("mean","sd","study.id","n_con")
+interleukin6_df4_incompletes1_con <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes1_con) <- columns
+interleukin6_df4_incompletes2_con <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes2_con) <- columns
+interleukin6_df4_incompletes3_con <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes3_con) <- columns
+interleukin6_df4_incompletes_con <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes_con) <- columns
+
+# select median and IQR columns then remove range columns to prevent estmeansd errors 
+interleukin6_df3_incompletes1_con <- subset(interleukin6_df2_con, is.na(l_range_interleukin6_con) & is.na(u_range_interleukin6_con) & !is.na(med_interleukin6_con) & !is.na(l_iqr_interleukin6_con) & !is.na(u_iqr_interleukin6_con))
+interleukin6_df3_incompletes1_con <- subset (interleukin6_df3_incompletes1_con, select = -c(l_range_interleukin6_con, u_range_interleukin6_con))
+
+# select median, IQR and range columns 
+interleukin6_df3_incompletes2_con <- subset(interleukin6_df2_con, !is.na(l_range_interleukin6_con) & !is.na(u_range_interleukin6_con) & !is.na(med_interleukin6_con) & !is.na(l_iqr_interleukin6_con) & !is.na(u_iqr_interleukin6_con))
+
+# interleukin6_df3_completes_con <- subset(interleukin6_df2_con, complete.cases(interleukin6_df2_con[, c("l_range_interleukin6_con", "l_iqr_interleukin6_con", "med_interleukin6_con", "u_iqr_interleukin6_con", "u_range_interleukin6_con")]))
+
+# select median and range columns then remove IQR columns to prevent estmeansd errors 
+interleukin6_df3_incompletes3_con <- subset(interleukin6_df2_con, !is.na(l_range_interleukin6_con) & !is.na(u_range_interleukin6_con) & !is.na(med_interleukin6_con) & is.na(l_iqr_interleukin6_con) & is.na(u_iqr_interleukin6_con))
+interleukin6_df3_incompletes3_con <- subset (interleukin6_df3_incompletes3_con, select = -c(l_iqr_interleukin6_con, u_iqr_interleukin6_con))
+
+# first loop for median and IQR
+
+for (i in 1:nrow(interleukin6_df3_incompletes1_con)) {
+  if (nrow(interleukin6_df3_incompletes1_con) == 0) {
+    # If the subset command returned no values, skip the rest of the code chunk
+    next
+  } else {
+    #for (i in 1:nrow(interleukin6_df3_incompletes1_con)) {
+      print(i)  # Debug statement
+      # Extract the current row
+      row <- interleukin6_df3_incompletes1_con[i, ]
+    
+      # Compute the mean and standard deviation using the qe.mean.sd() function
+        meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_interleukin6_con), med.val = as.numeric(row$med_interleukin6_con), q3.val = as.numeric(row$u_iqr_interleukin6_con), n = as.numeric(row$n_con))
+    
+      # # Store the results in the results data frame
+      # interleukin6_df4_incompletes_con <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+        # Store the results in the results data frame
+      interleukin6_df4_incompletes1_con <- rbind(interleukin6_df4_incompletes1_con, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_con = row$n_con))
+    }
+  }
+#}
+    
+print(interleukin6_df4_incompletes1_con)
+
+# second loop for median, IQR and range 
+
+for (i in 1:nrow(interleukin6_df3_incompletes2_con)) {
+  if (nrow(interleukin6_df3_incompletes2_con) == 0) {
+    # If the subset command returned no values, skip the rest of the code chunk
+    next
+  } else {
+    #for (i in 1:nrow(interleukin6_df3_incompletes2_con)) {
+      print(i)  # Debug statement
+      # Extract the current row
+      row <- interleukin6_df3_incompletes2_con[i, ]
+    
+      # Compute the mean and standard deviation using the qe.mean.sd() function
+        meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_interleukin6_con), q1.val = as.numeric(row$l_iqr_interleukin6_con), med.val = as.numeric(row$med_interleukin6_con), q3.val = as.numeric(row$u_iqr_interleukin6_con), max.val = as.numeric(row$u_range_interleukin6_con), n = as.numeric(row$n_con))
+    
+      # # Store the results in the results data frame
+      # interleukin6_df4_incompletes_con <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+        # Store the results in the results data frame
+      interleukin6_df4_incompletes2_con <- rbind(interleukin6_df4_incompletes2_con, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_con = row$n_con))
+  }
+}
+  
+print(interleukin6_df4_incompletes2_con)  
+
+# third loop for median and range 
+
+for (i in 1:nrow(interleukin6_df3_incompletes3_con)) {
+  if (nrow(interleukin6_df3_incompletes3_con) == 0) {
+    # If the subset command returned no values, skip the rest of the code chunk
+    next
+  } else {
+    # for (i in 1:nrow(interleukin6_df3_incompletes3_con)) {
+      print(i)  # Debug statement
+      # Extract the current row
+      row <- interleukin6_df3_incompletes3_con[i, ]
+    
+      # Compute the mean and standard deviation using the qe.mean.sd() function
+        meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_interleukin6_con), med.val = as.numeric(row$med_interleukin6_con), max.val = as.numeric(row$u_range_interleukin6_con), n = as.numeric(row$n_con))
+    
+      # # Store the results in the results data frame
+      # interleukin6_df4_incompletes_con <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+        # Store the results in the results data frame
+      interleukin6_df4_incompletes3_con <- rbind(interleukin6_df4_incompletes3_con, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_con = row$n_con))
+  }
+}
+  
+print(interleukin6_df4_incompletes3_con)  
+
+# Bind the rows of the three tables together
+interleukin6_df4_incompletes_con <- rbind(interleukin6_df4_incompletes1_con, interleukin6_df4_incompletes2_con, interleukin6_df4_incompletes3_con)
+
+for (i in 1:nrow(interleukin6_df4_incompletes_con)) {
+  if (nrow(interleukin6_df4_incompletes_con) == 0) {
+      # If the subset command returned no values, skip the rest of the code chunk
+      next
+    } else {
+      interleukin6_df4_incompletes_con$sd <- format(as.numeric(interleukin6_df4_incompletes_con$sd), scientific = FALSE)
+  }
+}
+  
+print(interleukin6_df4_incompletes_con)  
+
+```
+
+
+```{r}
+# Step 3 final part a - create combined dataframe of estimated values
+
+# Combine the data frames
+# interleukin6_df4_all_con <- rbind(interleukin6_df4_completes_con, interleukin6_df4_incompletes_con)
+
+# Rename dataframe for further processes
+interleukin6_df4_all_con <- interleukin6_df4_incompletes_con
+
+# Order the data frame by the "study.id" column
+# for (i in 1:nrow(interleukin6_df4_all_con)) {
+#   if (nrow(interleukin6_df4_all_con) == 0) {
+#       # If the subset command returned no values, skip the rest of the code chunk
+#       next
+#     } else {
+#       interleukin6_df4_all_con <- interleukin6_df4_all_con[order(interleukin6_df4_all_con$study.id),]
+#   }
+# }
+
+# Order the data frame by the "study.id" column redone as a if x>0 statement
+if (nrow(interleukin6_df4_all_con) > 0) {
+      interleukin6_df4_all_con <- interleukin6_df4_all_con[order(interleukin6_df4_all_con$study.id),]
+}
+
+```
+
+
+```{r}
+# Step 3 final part b - merge estimated values with extracted values
+
+# Subset data_t to include only rows where "mean_interleukin6_con" and "SD_interleukin6_con" have a value
+data_t_interleukin6_con <- data_t[!is.na(data_t$mean_interleukin6_con) & !is.na(data_t$SD_interleukin6_con),]
+
+# Extract only the "mean_interleukin6_con" and "SD_interleukin6_con" columns
+data_t_interleukin6_con <- data_t_interleukin6_con[, c("mean_interleukin6_con", "SD_interleukin6_con", "n_con")]
+
+# Extract the row names from data_t
+row_names <- rownames(data_t_interleukin6_con)
+
+# Create a "study.id" column in data_t_interleukin6_con using the row names
+data_t_interleukin6_con$study.id <- row_names
+
+# Rename the "mean" column to "mean_interleukin6_con"
+names(interleukin6_df4_all_con)[names(interleukin6_df4_all_con) == "mean"] <- "mean_interleukin6_con"
+
+# Rename the "sd" column to "SD_interleukin6_con"
+names(interleukin6_df4_all_con)[names(interleukin6_df4_all_con) == "sd"] <- "SD_interleukin6_con"
+
+# Add column "value" to both tables so source of mean and sd is clear
+
+# Add a "value" column to the interleukin6_df4_all_con data frame with estimated
+if (nrow(interleukin6_df4_all_con) > 0) {
+  interleukin6_df4_all_con$value <- "estimated"
+}
+
+# Add a "value" column to the data_t_interleukin6_con data frame with extracted
+if (nrow(data_t_interleukin6_con) > 0) {
+  data_t_interleukin6_con$value <- "extracted"
+}
+
+
+
+# Combine data_t_interleukin6_con with interleukin6_df4_all_con
+interleukin6_combined_con <- rbind(data_t_interleukin6_con, interleukin6_df4_all_con)
+
+# Reorder the rows based on the "studyid" column
+interleukin6_combined_con <- interleukin6_combined_con[order(interleukin6_combined_con$study.id),]
+
+# For rows with the same "studyid" value, use the values from data_t_interleukin6_con
+interleukin6_combined_con <- unique(interleukin6_combined_con, by = "studyid", fromLast = TRUE)
+
+
+```
+
+
+# Step 2 add repeat for ftd 
+
+
+```{r}
+# now loop through the incomplete cases for ftd patients
+
+columns <- c("mean","sd","study.id","n_ftd")
+interleukin6_df4_incompletes1_ftd <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes1_ftd) <- columns
+interleukin6_df4_incompletes2_ftd <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes2_ftd) <- columns
+interleukin6_df4_incompletes3_ftd <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes3_ftd) <- columns
+interleukin6_df4_incompletes_ftd <- (matrix(nrow = 0, ncol = length(columns)))
+colnames(interleukin6_df4_incompletes_ftd) <- columns
+
+# select median and IQR columns then remove range columns to prevent estmeansd errors 
+interleukin6_df3_incompletes1_ftd <- subset(interleukin6_df2_ftd, is.na(l_range_interleukin6_ftd) & is.na(u_range_interleukin6_ftd) & !is.na(med_interleukin6_ftd) & !is.na(l_iqr_interleukin6_ftd) & !is.na(u_iqr_interleukin6_ftd))
+interleukin6_df3_incompletes1_ftd <- subset (interleukin6_df3_incompletes1_ftd, select = -c(l_range_interleukin6_ftd, u_range_interleukin6_ftd))
+
+# select median, IQR and range columns 
+interleukin6_df3_incompletes2_ftd <- subset(interleukin6_df2_ftd, !is.na(l_range_interleukin6_ftd) & !is.na(u_range_interleukin6_ftd) & !is.na(med_interleukin6_ftd) & !is.na(l_iqr_interleukin6_ftd) & !is.na(u_iqr_interleukin6_ftd))
+
+# select median and range columns then remove IQR columns to prevent estmeansd errors 
+interleukin6_df3_incompletes3_ftd <- subset(interleukin6_df2_ftd, !is.na(l_range_interleukin6_ftd) & !is.na(u_range_interleukin6_ftd) & !is.na(med_interleukin6_ftd) & is.na(l_iqr_interleukin6_ftd) & is.na(u_iqr_interleukin6_ftd))
+interleukin6_df3_incompletes3_ftd <- subset (interleukin6_df3_incompletes3_ftd, select = -c(l_iqr_interleukin6_ftd, u_iqr_interleukin6_ftd))
+
+# first loop for median and IQR
+
+for (i in 1:nrow(interleukin6_df3_incompletes1_ftd)) {
+  if (nrow(interleukin6_df3_incompletes1_ftd) == 0) {
+    # If the subset command returned no values, skip the rest of the code chunk
+    next
+  } else {
+    #for (i in 1:nrow(interleukin6_df3_incompletes1_ftd)) {
+      print(i)  # Debug statement
+      # Extract the current row
+      row <- interleukin6_df3_incompletes1_ftd[i, ]
+    
+      # Compute the mean and standard deviation using the qe.mean.sd() function
+        meansd <- qe.mean.sd(q1.val = as.numeric(row$l_iqr_interleukin6_ftd), med.val = as.numeric(row$med_interleukin6_ftd), q3.val = as.numeric(row$u_iqr_interleukin6_ftd), n = as.numeric(row$n_ftd))
+    
+      # # Store the results in the results data frame
+      # interleukin6_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+        # Store the results in the results data frame
+      interleukin6_df4_incompletes1_ftd <- rbind(interleukin6_df4_incompletes1_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
+    }
+  }
+#}
+    
+print(interleukin6_df4_incompletes1_ftd)
+
+# second loop for median, IQR and range 
+
+for (i in 1:nrow(interleukin6_df3_incompletes2_ftd)) {
+  if (nrow(interleukin6_df3_incompletes2_ftd) == 0) {
+    # If the subset command returned no values, skip the rest of the code chunk
+    next
+  } else {
+    #for (i in 1:nrow(interleukin6_df3_incompletes2_ftd)) {
+      print(i)  # Debug statement
+      # Extract the current row
+      row <- interleukin6_df3_incompletes2_ftd[i, ]
+    
+      # Compute the mean and standard deviation using the qe.mean.sd() function
+        meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_interleukin6_ftd), q1.val = as.numeric(row$l_iqr_interleukin6_ftd), med.val = as.numeric(row$med_interleukin6_ftd), q3.val = as.numeric(row$u_iqr_interleukin6_ftd), max.val = as.numeric(row$u_range_interleukin6_ftd), n = as.numeric(row$n_ftd))
+    
+      # # Store the results in the results data frame
+      # interleukin6_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+        # Store the results in the results data frame
+      interleukin6_df4_incompletes2_ftd <- rbind(interleukin6_df4_incompletes2_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
+  }
+}
+  
+print(interleukin6_df4_incompletes2_ftd)  
+
+# third loop for median and range 
+
+for (i in 1:nrow(interleukin6_df3_incompletes3_ftd)) {
+  if (nrow(interleukin6_df3_incompletes3_ftd) == 0) {
+    # If the subset command returned no values, skip the rest of the code chunk
+    next
+  } else {
+    # for (i in 1:nrow(interleukin6_df3_incompletes3_ftd)) {
+      print(i)  # Debug statement
+      # Extract the current row
+      row <- interleukin6_df3_incompletes3_ftd[i, ]
+    
+      # Compute the mean and standard deviation using the qe.mean.sd() function
+        meansd <- qe.mean.sd(min.val = as.numeric(row$l_range_interleukin6_ftd), med.val = as.numeric(row$med_interleukin6_ftd), max.val = as.numeric(row$u_range_interleukin6_ftd), n = as.numeric(row$n_ftd))
+    
+      # # Store the results in the results data frame
+      # interleukin6_df4_incompletes_ftd <- cbind(data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid))
+        # Store the results in the results data frame
+      interleukin6_df4_incompletes3_ftd <- rbind(interleukin6_df4_incompletes3_ftd, data.frame(mean = meansd$est.mean, sd = meansd$est.sd, study.id = row$studyid, n_ftd = row$n_ftd))
+  }
+}
+  
+print(interleukin6_df4_incompletes3_ftd)  
+
+# Bind the rows of the three tables together
+interleukin6_df4_incompletes_ftd <- rbind(interleukin6_df4_incompletes1_ftd, interleukin6_df4_incompletes2_ftd, interleukin6_df4_incompletes3_ftd)
+
+for (i in 1:nrow(interleukin6_df4_incompletes_ftd)) {
+  if (nrow(interleukin6_df4_incompletes_ftd) == 0) {
+      # If the subset command returned no values, skip the rest of the code chunk
+      next
+    } else {
+      interleukin6_df4_incompletes_ftd$sd <- format(as.numeric(interleukin6_df4_incompletes_ftd$sd), scientific = FALSE)
+  }
+}
+
+
+print(interleukin6_df4_incompletes_ftd)  
+
+```
+
+
+
+```{r}
+# Step 3 final part a - create combined dataframe of estimated values
+
+# Combine the data frames
+# interleukin6_df4_all_ftd <- rbind(interleukin6_df4_completes_ftd, interleukin6_df4_incompletes_ftd)
+
+# rename incompletes dataframe for further processing
+interleukin6_df4_all_ftd <- interleukin6_df4_incompletes_ftd
+
+# Order the data frame by the "study.id" column
+# for (i in 1:nrow(interleukin6_df4_all_ftd)) {
+#   if (nrow(interleukin6_df4_all_ftd) == 0) {
+#       # If the subset command returned no values, skip the rest of the code chunk
+#       next
+#     } else {
+#       interleukin6_df4_all_ftd <- interleukin6_df4_all_ftd[order(interleukin6_df4_all_ftd$study.id),]
+#   }
+# }
+
+# Order the data frame by the "study.id" column redone as a if x>0 statement
+if (nrow(interleukin6_df4_all_ftd) > 0) {
+      interleukin6_df4_all_ftd <- interleukin6_df4_all_ftd[order(interleukin6_df4_all_ftd$study.id),]
+}
+
+```
+
+
+```{r}
+# Step 3 final part b - merge estimated values with extracted values
+
+# Subset data_t to include only rows where "mean_interleukin6_ftd" and "SD_interleukin6_ftd" have a value
+data_t_interleukin6_ftd <- data_t[!is.na(data_t$mean_interleukin6_ftd) & !is.na(data_t$SD_interleukin6_ftd),]
+
+# Extract only the "mean_interleukin6_ftd" and "SD_interleukin6_ftd" columns
+data_t_interleukin6_ftd <- data_t_interleukin6_ftd[, c("mean_interleukin6_ftd", "SD_interleukin6_ftd", "n_ftd")]
+
+# Extract the row names from data_t
+row_names <- rownames(data_t_interleukin6_ftd)
+
+# Create a "study.id" column in data_t_interleukin6_ftd using the row names
+data_t_interleukin6_ftd$study.id <- row_names
+
+# Rename the "mean" column to "mean_interleukin6_ftd"
+names(interleukin6_df4_all_ftd)[names(interleukin6_df4_all_ftd) == "mean"] <- "mean_interleukin6_ftd"
+
+# Rename the "sd" column to "SD_interleukin6_ftd"
+names(interleukin6_df4_all_ftd)[names(interleukin6_df4_all_ftd) == "sd"] <- "SD_interleukin6_ftd"
+
+# Add column "value" to both tables so source of mean and sd is clear
+
+# Add a "value" column to the interleukin6_df4_all_con data frame with estimated
+if (nrow(interleukin6_df4_all_ftd) > 0) {
+  interleukin6_df4_all_ftd$value <- "estimated"
+}
+
+# Add a "value" column to the data_t_interleukin6_con data frame with extracted
+if (nrow(data_t_interleukin6_ftd) > 0) {
+  data_t_interleukin6_ftd$value <- "extracted"
+}
+
+# Combine data_t_interleukin6_ftd with interleukin6_df4_all_ftd
+interleukin6_combined_ftd <- rbind(data_t_interleukin6_ftd, interleukin6_df4_all_ftd)
+
+# Reorder the rows based on the "studyid" column
+interleukin6_combined_ftd <- interleukin6_combined_ftd[order(interleukin6_combined_ftd$study.id),]
+
+# For rows with the same "studyid" value, use the values from data_t_interleukin6_ftd
+interleukin6_combined_ftd <- unique(interleukin6_combined_ftd, by = "studyid", fromLast = TRUE)
+
+```
+
+
+# Step 3 add effect size calculations
+
+```{r}
+# load libraries 
+library(metafor)
+library(dplyr)
+library(robumeta)
+library(data.table)
+```
+
+
+
+```{r}
+# combine control and FTD data frames 
+interleukin6_combined <- full_join(interleukin6_combined_con, interleukin6_combined_ftd, by="study.id")
+
+# make data frame columns except study id numeric
+interleukin6_combined <- mutate_at(interleukin6_combined, vars(contains("_")), function(x) as.numeric(as.character(x)))
+
+```
+
+
+```{r}
+# use escalc to calculate effect sizes 
+
+# change name of immune marker for each of the terms
+
+df2 <- escalc(data=interleukin6_combined, measure="SMD", m2i=mean_interleukin6_con, m1i=mean_interleukin6_ftd,
+                sd2i=SD_interleukin6_con, sd1i=SD_interleukin6_ftd,
+                n2i=n_con, n1i=n_ftd,slab=paste("ID", study.id))
+
+```
+
+```{r}
+#random effects model 
+res <- rma (yi, vi, method="REML", data=df2)
+```
+
+
+```{r}
+# construct forest plot 
+
+forest(res) 
+
+```
+
+
+```{r}
+# construct funnel plot 
+
+funnel(res) 
+
+```
+
+```{r}
+# heterogeneity measures
+
+res.CA  <- rma(yi, vi, method="HE", data=df2)
+
+res.CA
+
+```
